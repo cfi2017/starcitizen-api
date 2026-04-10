@@ -17,11 +17,11 @@ image:
   repository: scwiki/api
   # -- Container image tag. Defaults to `latest` from Docker Hub - override
   # with `develop` or a commit SHA if you need a different stream.
-  tag: "latest"
+  tag: "develop"
   # -- Image digest (overrides tag when set)
   digest: ""
   # -- Image pull policy
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # -- Image pull secrets
 imagePullSecrets: []
