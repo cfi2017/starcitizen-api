@@ -141,7 +141,7 @@ jobs:
           DB_HOST: "127.0.0.1"
           DB_PORT: 5432
           DB_USERNAME: "scw__api"
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD: uwu
         run: php artisan migrate
 
       - name: Execute tests via Pest
@@ -151,7 +151,7 @@ jobs:
           DB_HOST: "127.0.0.1"
           DB_PORT: 5432
           DB_USERNAME: "scw__api"
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD: uwu
         run: vendor/bin/pest --compact tests/Unit tests/Feature
 
   laravel-test-browser:
