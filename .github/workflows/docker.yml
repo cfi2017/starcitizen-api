@@ -78,7 +78,7 @@ jobs:
         env:
           POSTGRES_DB: scw__api
           POSTGRES_USER: scw__api
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_PASSWORD: uwu
         ports:
           - 5432:5432
         options: >-
