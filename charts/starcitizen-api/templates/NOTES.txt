@@ -1,0 +1,52 @@
+Star Citizen API has been installed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }}
+
+=== Database ===
+{{- if .Values.postgres.enabled }}
+The bundled CloudPirates PostgreSQL sub-chart is managing your database.
+Host:      {{ include "starcitizen-api.postgres.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+Database:  {{ .Values.postgres.auth.database }}
+Username:  {{ .Values.postgres.auth.username }}
+Password:  kubectl -n {{ .Release.Namespace }} get secret {{ include "starcitizen-api.postgres.fullname" . }} -o jsonpath='{.data.postgres-password}' | base64 -d
+{{- else }}
+Using external database at {{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.database }}.
+{{- end }}
+
+=== Accessing the API ===
+{{- if .Values.gatewayApi.enabled }}
+A Gateway API HTTPRoute has been created. Make sure the Gateway
+{{- range .Values.gatewayApi.parentRefs }} "{{ .name }}"{{ end }} is reachable.
+Hostnames: {{ join ", " .Values.gatewayApi.hostnames }}
+{{- else if .Values.ingress.enabled }}
+Ingress is enabled:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+No external route has been configured. You can port-forward the service:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "starcitizen-api.fullname" . }} 8080:{{ .Values.api.service.port }}
+
+Then browse to http://localhost:8080.
+{{- end }}
+
+=== Automatic data updates ===
+- The scheduler deployment runs Laravel's schedule:work and drives recurring
+  jobs (ship matrix, starmap, galactapedia, stats, comm-link sync, ...).
+- The data-refresh CronJob ({{ .Values.dataSources.refreshCronJob.schedule }})
+  pulls the upstream data repositories and re-runs `php artisan game:sync`:
+    {{- range .Values.dataSources.repositories }}
+    * {{ .name }} ({{ .url }})
+    {{- end }}
+
+=== Next steps ===
+Check the rollout:
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Tail the scheduler to confirm automatic updates are running:
+
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "starcitizen-api.fullname" . }}-scheduler

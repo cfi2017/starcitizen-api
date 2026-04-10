@@ -1,0 +1,103 @@
+name: Chart
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "charts/**"
+      - ".github/workflows/chart.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "charts/**"
+      - ".github/workflows/chart.yml"
+
+jobs:
+  lint:
+    name: Lint & template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
+      - name: Update dependencies
+        working-directory: charts/starcitizen-api
+        run: helm dependency update
+
+      - name: Helm lint
+        working-directory: charts/starcitizen-api
+        run: helm lint .
+
+      # Render the chart against a few representative value combinations so
+      # that conditional templates are exercised in CI.
+      - name: Template (defaults - bundled postgres)
+        working-directory: charts/starcitizen-api
+        run: helm template ci . --namespace ci > /tmp/rendered-defaults.yaml
+
+      - name: Template (external database)
+        working-directory: charts/starcitizen-api
+        run: |
+          helm template ci . --namespace ci \
+            --set postgres.enabled=false \
+            --set externalDatabase.host=postgres.example.com \
+            --set externalDatabase.database=starcitizen \
+            --set externalDatabase.username=starcitizen \
+            --set externalDatabase.existingSecret.name=external-db-creds \
+            --set externalDatabase.existingSecret.key=password \
+            > /tmp/rendered-external-db.yaml
+
+      - name: Template (Gateway API HTTPRoute)
+        working-directory: charts/starcitizen-api
+        run: |
+          helm template ci . --namespace ci \
+            --set gatewayApi.enabled=true \
+            --set 'gatewayApi.parentRefs[0].name=external' \
+            --set 'gatewayApi.parentRefs[0].namespace=gateway-system' \
+            --set 'gatewayApi.parentRefs[0].sectionName=https' \
+            --set 'gatewayApi.hostnames[0]=api.example.com' \
+            > /tmp/rendered-gateway-api.yaml
+
+      - name: Template (Ingress)
+        working-directory: charts/starcitizen-api
+        run: |
+          helm template ci . --namespace ci \
+            --set ingress.enabled=true \
+            --set ingress.className=nginx \
+            > /tmp/rendered-ingress.yaml
+
+      # Validate rendered manifests against upstream Kubernetes schemas and
+      # Gateway API CRDs. Uses kubeconform because it understands CRDs via
+      # the --schema-location option.
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: Validate rendered manifests
+        run: |
+          set -e
+          for f in /tmp/rendered-*.yaml; do
+            echo "::group::kubeconform $f"
+            kubeconform \
+              -strict \
+              -ignore-missing-schemas \
+              -kubernetes-version 1.30.0 \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{ .NormalizedKubernetesVersion }}-standalone-strict/{{ .ResourceKind }}{{ .KindSuffix }}.json' \
+              -summary \
+              "$f"
+            echo "::endgroup::"
+          done

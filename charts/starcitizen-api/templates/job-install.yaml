@@ -1,0 +1,68 @@
+{{- if .Values.installJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-install-{{ .Release.Revision }}
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "install") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with (include "starcitizen-api.commonAnnotations" .) }}
+    {{- . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.installJob.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.installJob.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "install") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "starcitizen-api.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "starcitizen-api.initContainers" . | nindent 8 }}
+      containers:
+        - name: install
+          image: {{ include "starcitizen-api.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.api.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo ">> Running Laravel migrations"
+              php artisan migrate --force --no-interaction
+              {{- range .Values.installJob.extraCommands }}
+              echo ">> {{ . | join " " }}"
+              {{ . | join " " }}
+              {{- end }}
+          env:
+            - name: CONTAINER_ROLE
+              value: app
+            {{- include "starcitizen-api.secretEnv" . | nindent 12 }}
+          envFrom:
+            {{- include "starcitizen-api.envFrom" . | nindent 12 }}
+          {{- with .Values.installJob.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- include "starcitizen-api.volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "starcitizen-api.volumes" . | nindent 8 }}
+{{- end }}

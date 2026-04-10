@@ -1,0 +1,27 @@
+apiVersion: v2
+name: starcitizen-api
+description: |
+  Helm chart for the Star Citizen API - a Laravel-based API providing access to
+  Star Citizen game data (items, vehicles, manufacturers, starmap, comm-links,
+  galactapedia) with multi-language support.
+type: application
+version: 0.1.0
+appVersion: "3.x"
+kubeVersion: ">=1.24.0-0"
+home: https://docs.star-citizen.wiki
+sources:
+  - https://github.com/StarCitizenWiki/API
+keywords:
+  - starcitizen
+  - laravel
+  - api
+  - game-data
+maintainers:
+  - name: StarCitizenWiki
+    url: https://github.com/StarCitizenWiki
+dependencies:
+  - name: postgres
+    version: "0.18.3"
+    repository: "oci://registry-1.docker.io/cloudpirates"
+    condition: postgres.enabled
+    alias: postgres

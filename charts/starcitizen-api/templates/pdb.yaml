@@ -1,0 +1,18 @@
+{{- if .Values.api.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-api
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "api") | nindent 4 }}
+spec:
+  {{- with .Values.api.pdb.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.api.pdb.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "starcitizen-api.componentSelectorLabels" (dict "context" . "component" "api") | nindent 6 }}
+{{- end }}

@@ -1,0 +1,572 @@
+# Default values for starcitizen-api.
+# This is a YAML-formatted file.
+
+# -- String to partially override starcitizen-api.fullname template
+nameOverride: ""
+# -- String to fully override starcitizen-api.fullname template
+fullnameOverride: ""
+# -- Common labels added to all resources
+commonLabels: {}
+# -- Common annotations added to all resources
+commonAnnotations: {}
+
+image:
+  # -- Container image registry
+  registry: docker.io
+  # -- Container image repository
+  repository: scwiki/api
+  # -- Container image tag. Defaults to `latest` from Docker Hub - override
+  # with `develop` or a commit SHA if you need a different stream.
+  tag: "latest"
+  # -- Image digest (overrides tag when set)
+  digest: ""
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets
+imagePullSecrets: []
+
+serviceAccount:
+  # -- Create a service account for the application pods
+  create: true
+  # -- Annotations for the service account
+  annotations: {}
+  # -- Name of the service account to use (generated if empty and create is true)
+  name: ""
+  # -- Automatically mount service account token
+  automount: false
+
+# =============================================================================
+# Application configuration
+# =============================================================================
+# Values below map directly to the environment variables documented in the
+# application's README. They are rendered into a ConfigMap (non-sensitive) and
+# a Secret (sensitive) and consumed by every workload via `envFrom`.
+# =============================================================================
+app:
+  # -- APP_NAME
+  name: "Star Citizen API"
+  # -- APP_ENV (local | production)
+  env: production
+  # -- APP_DEBUG
+  debug: false
+  # -- APP_URL - the public URL under which the API is reachable
+  url: https://api.star-citizen.wiki
+  # -- APP_LOCALE
+  locale: en
+  # -- APP_FALLBACK_LOCALE
+  fallbackLocale: en
+  # -- APP_FAKER_LOCALE
+  fakerLocale: en_US
+  # -- APP_MAINTENANCE_DRIVER
+  maintenanceDriver: file
+
+  # -- APP_KEY as a literal Laravel key (`base64:...`). Leave empty to have
+  # the chart generate a random key on first install and reuse it on upgrade
+  # (via Helm `lookup` on the managed secret).
+  key: ""
+  # -- Reference an existing secret for APP_KEY instead of managing it here
+  existingKeySecret:
+    # Name of an existing secret containing the APP_KEY
+    name: ""
+    # Key inside the secret
+    key: APP_KEY
+
+  # BCRYPT_ROUNDS
+  bcryptRounds: 12
+
+logging:
+  # -- LOG_CHANNEL
+  channel: stack
+  # -- LOG_STACK
+  stack: single
+  # -- LOG_DEPRECATIONS_CHANNEL
+  deprecationsChannel: "null"
+  # -- LOG_LEVEL (debug | info | warning | error)
+  level: info
+
+session:
+  # -- SESSION_DRIVER
+  driver: database
+  # -- SESSION_LIFETIME (minutes)
+  lifetime: 120
+  # -- SESSION_ENCRYPT
+  encrypt: false
+  # -- SESSION_PATH
+  path: /
+  # -- SESSION_DOMAIN
+  domain: "null"
+
+cache:
+  # -- CACHE_STORE (file | database | redis)
+  store: database
+
+queue:
+  # -- QUEUE_CONNECTION (sync | database | redis)
+  connection: database
+
+# -- Optional Sanctum / Fortify knobs
+auth:
+  # -- SANCTUM_STATEFUL_DOMAINS (comma separated)
+  sanctumStatefulDomains: ""
+  # -- FORTIFY_ALLOW_REGISTRATION
+  fortifyAllowRegistration: false
+
+# -- Mail configuration
+mail:
+  # -- MAIL_MAILER (smtp | sendmail | log)
+  mailer: log
+  # -- MAIL_HOST
+  host: "127.0.0.1"
+  # -- MAIL_PORT
+  port: 2525
+  # -- MAIL_USERNAME
+  username: ""
+  # -- MAIL_FROM_ADDRESS
+  fromAddress: "hello@example.com"
+  # -- MAIL_FROM_NAME
+  fromName: "${APP_NAME}"
+  # -- MAIL_PASSWORD (stored in the managed secret)
+  password: ""
+  # -- Reference an existing secret for the mail password
+  existingSecret:
+    name: ""
+    key: MAIL_PASSWORD
+
+# -- Filesystem configuration
+filesystem:
+  # -- FILESYSTEM_DISK (local | public | s3)
+  disk: local
+  s3:
+    # -- AWS_ACCESS_KEY_ID
+    accessKeyId: ""
+    # -- AWS_SECRET_ACCESS_KEY (stored in managed secret)
+    secretAccessKey: ""
+    # -- AWS_DEFAULT_REGION
+    region: us-east-1
+    # -- AWS_BUCKET
+    bucket: ""
+    # -- AWS_USE_PATH_STYLE_ENDPOINT
+    usePathStyleEndpoint: false
+    # -- Reference an existing secret for AWS credentials
+    existingSecret:
+      name: ""
+      accessKeyIdKey: AWS_ACCESS_KEY_ID
+      secretAccessKeyKey: AWS_SECRET_ACCESS_KEY
+
+# -- DeepL translation integration
+deepl:
+  # -- DEEPL_AUTH_KEY (stored in the managed secret). Leave empty to disable.
+  authKey: ""
+  # -- DEEPL_TARGET_LOCALE
+  targetLocale: de
+  # -- DEEPL_TRANSLATION_LOCALE (defaults to targetLocale if empty)
+  translationLocale: ""
+  # -- COMM_LINKS_AUTO_TRANSLATE_AFTER_IMPORT
+  commLinksAutoTranslateAfterImport: false
+  # -- Reference an existing secret for the DeepL API key
+  existingSecret:
+    name: ""
+    key: DEEPL_AUTH_KEY
+
+# =============================================================================
+# Extra environment variables
+# =============================================================================
+# Escape hatch for any env var not modeled above.
+# -- Additional environment variables (non-sensitive, rendered to ConfigMap)
+extraEnv: {}
+  # CUSTOM_VAR: "value"
+# -- Additional environment variables from existing sources
+extraEnvFrom: []
+  # - configMapRef:
+  #     name: extra-config
+  # - secretRef:
+  #     name: extra-secret
+
+# =============================================================================
+# Database
+# =============================================================================
+# There are two mutually-exclusive ways to provide a PostgreSQL database:
+#  1) The bundled CloudPirates `postgres` sub-chart (set `postgres.enabled=true`)
+#  2) An externally managed database (set `postgres.enabled=false` and fill
+#     `externalDatabase`)
+# =============================================================================
+
+# CloudPirates PostgreSQL sub-chart.
+# Full values: https://github.com/CloudPirates-io/helm-charts/tree/main/charts/postgres
+postgres:
+  # -- Enable the bundled CloudPirates PostgreSQL sub-chart
+  enabled: true
+  auth:
+    # -- Database name created on first boot
+    database: starcitizen
+    # -- Database user created on first boot
+    username: starcitizen
+    # -- Database user password. Leave empty to let the sub-chart generate one.
+    password: ""
+  persistence:
+    enabled: true
+    size: 20Gi
+  primary: {}
+  resources: {}
+
+# External database configuration (used when `postgres.enabled=false`).
+externalDatabase:
+  # -- Database host
+  host: ""
+  # -- Database port
+  port: 5432
+  # -- Database name
+  database: starcitizen
+  # -- Database username
+  username: starcitizen
+  # -- Database password (stored in the managed secret). Prefer `existingSecret`.
+  password: ""
+  # -- Reference an existing secret containing the database password
+  existingSecret:
+    name: ""
+    key: password
+
+# =============================================================================
+# Shared application storage (Laravel `storage/`)
+# =============================================================================
+# All application workloads (api, scheduler, queue workers) share this volume
+# so they can see the same logs, uploaded files, git submodules (game data),
+# and downloaded assets.
+# =============================================================================
+persistence:
+  # -- Enable the shared storage PVC (highly recommended)
+  enabled: true
+  # -- Storage class for the PVC. Leave empty to use the cluster default.
+  storageClass: ""
+  # -- Access mode. `ReadWriteMany` is required when running >1 api replica or
+  # when api/scheduler/queue pods land on different nodes. Use `ReadWriteOnce`
+  # only if all pods are scheduled to the same node.
+  accessMode: ReadWriteMany
+  # -- Persistent volume size
+  size: 20Gi
+  # -- Use an existing PVC instead of creating one
+  existingClaim: ""
+  # -- Annotations for the PVC
+  annotations: {}
+
+# =============================================================================
+# Automatic data updates
+# =============================================================================
+# The API depends on three upstream data repositories which are shipped as git
+# submodules:
+#   - StarCitizenWiki/scunpacked-data (game data)
+#   - rjcncpt/StarCitizen-Deutsch-INI (German translations)
+#   - StarCitizenToolBox/LocalizationData (Chinese translations)
+#
+# On top of that, the Laravel scheduler automatically refreshes online data
+# sources (ship matrix, starmap, galactapedia, etc).
+#
+# The chart handles both:
+#  - Every workload runs an init container that ensures the submodules exist
+#    on the shared PVC (initial clone on first start).
+#  - A CronJob periodically `git pull`s the submodules and re-runs
+#    `php artisan game:sync` to import the refreshed data.
+#  - The dedicated `scheduler` deployment runs `schedule:work` to drive the
+#    Laravel scheduler for all other automatic updates.
+# =============================================================================
+dataSources:
+  # -- Git repositories to pull into `storage/app/api/`
+  repositories:
+    - name: scunpacked-data
+      url: https://github.com/StarCitizenWiki/scunpacked-data.git
+      branch: ""
+    - name: StarCitizenDeutsch
+      url: https://github.com/rjcncpt/StarCitizen-Deutsch-INI.git
+      branch: ""
+    - name: ScToolBoxLocales
+      url: https://github.com/StarCitizenToolBox/LocalizationData.git
+      branch: ""
+
+  # Init container that clones the data repositories on pod start.
+  init:
+    # -- Enable cloning data sources on pod start
+    enabled: true
+    image:
+      repository: alpine/git
+      tag: "2.45.2"
+      pullPolicy: IfNotPresent
+    resources: {}
+
+  # CronJob that periodically refreshes the git repositories and runs
+  # `php artisan game:sync` to import the refreshed data.
+  refreshCronJob:
+    # -- Enable the periodic data refresh CronJob
+    enabled: true
+    # -- Cron schedule (default: weekly on Monday 04:00)
+    schedule: "0 4 * * 1"
+    # -- Suspend the CronJob
+    suspend: false
+    # -- Number of successful jobs to retain
+    successfulJobsHistoryLimit: 3
+    # -- Number of failed jobs to retain
+    failedJobsHistoryLimit: 3
+    # -- Concurrency policy
+    concurrencyPolicy: Forbid
+    # -- Restart policy for the pod
+    restartPolicy: OnFailure
+    # -- Artisan command run after the git pull completes
+    command: ["php", "artisan", "game:sync"]
+    resources: {}
+
+# =============================================================================
+# Install / upgrade hook job
+# =============================================================================
+# Runs `php artisan migrate --force` (and optional additional commands) as a
+# Helm post-install / post-upgrade hook before traffic is served.
+# =============================================================================
+installJob:
+  # -- Enable the install/upgrade hook job
+  enabled: true
+  # -- Additional artisan commands to run after migrate (executed sequentially)
+  extraCommands: []
+    # - ["php", "artisan", "db:seed", "--force"]
+  # -- Backoff limit
+  backoffLimit: 3
+  # -- TTL seconds after finished
+  ttlSecondsAfterFinished: 300
+  resources: {}
+
+# =============================================================================
+# Workloads
+# =============================================================================
+api:
+  # -- Number of replicas for the API (web) deployment
+  replicaCount: 2
+  # -- Pod-level annotations
+  podAnnotations: {}
+  # -- Pod-level labels
+  podLabels: {}
+  # -- Pod security context
+  podSecurityContext:
+    fsGroup: 33
+  # -- Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 33
+    capabilities:
+      drop:
+        - ALL
+  # -- Resource requests and limits
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  # -- Pod affinity rules
+  affinity: {}
+  # -- Node selector
+  nodeSelector: {}
+  # -- Pod tolerations
+  tolerations: []
+  # -- Topology spread constraints
+  topologySpreadConstraints: []
+  # -- Update strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  # -- Liveness probe (uses Laravel's `/up` endpoint)
+  livenessProbe:
+    httpGet:
+      path: /up
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /up
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # -- Startup probe
+  startupProbe:
+    httpGet:
+      path: /up
+      port: http
+    failureThreshold: 30
+    periodSeconds: 5
+
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- Service port
+    port: 80
+    # -- Container port (matches the Dockerfile Apache port)
+    targetPort: 8080
+    # -- Service annotations
+    annotations: {}
+
+  # Horizontal pod autoscaler
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: ""
+
+  # Pod disruption budget
+  pdb:
+    enabled: false
+    minAvailable: 1
+    # maxUnavailable: ""
+
+# Laravel scheduler. Runs `php artisan schedule:work` which is what drives
+# the recurring data updates (starmap:sync, vehicles:import-*, galactapedia:*,
+# stats:sync, comm-link:schedule, etc) defined in `routes/console.php`.
+scheduler:
+  # -- Enable the scheduler deployment (required for automatic data updates)
+  enabled: true
+  replicaCount: 1
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    fsGroup: 33
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 33
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+
+# Default queue worker
+queueDefault:
+  enabled: true
+  replicaCount: 1
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    fsGroup: 33
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 33
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  # -- Passed to docker/start.sh
+  tries: 3
+  maxJobs: 20
+  sleep: 3
+  timeout: 90
+  memoryLimit: 512
+
+# Queue worker for the `expensive` queue (image hashing, similarity)
+queueExpensive:
+  enabled: true
+  replicaCount: 1
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    fsGroup: 33
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 33
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  tries: 3
+  maxJobs: 20
+  sleep: 3
+  timeout: 600
+  memoryLimit: 1024
+
+# =============================================================================
+# Gateway API (HTTPRoute)
+# =============================================================================
+gatewayApi:
+  # -- Enable Gateway API HTTPRoute
+  enabled: false
+  # -- API version for the HTTPRoute. Use `gateway.networking.k8s.io/v1` on
+  # clusters running Gateway API v1.0+ (recommended). Use `v1beta1` for older
+  # deployments.
+  apiVersion: gateway.networking.k8s.io/v1
+  # -- Extra annotations
+  annotations: {}
+  # -- Extra labels
+  labels: {}
+  # -- Gateway parent refs
+  parentRefs:
+    - name: ""
+      # namespace: gateway-system
+      # sectionName: https
+      # port: 443
+      # kind: Gateway
+      # group: gateway.networking.k8s.io
+  # -- Hostnames matched by the route
+  hostnames: []
+    # - api.star-citizen.wiki
+  # -- Route rules. Leave empty to use a sensible default (match everything,
+  # backend -> api service).
+  rules: []
+    # - matches:
+    #     - path:
+    #         type: PathPrefix
+    #         value: /
+    #   filters: []
+    #   backendRefs:
+    #     - name: <auto>
+    #       port: <auto>
+
+# =============================================================================
+# Classic Ingress (alternative to Gateway API)
+# =============================================================================
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: api.star-citizen.wiki
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - hosts:
+    #     - api.star-citizen.wiki
+    #   secretName: starcitizen-api-tls

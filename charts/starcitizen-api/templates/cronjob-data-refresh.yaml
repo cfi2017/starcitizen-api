@@ -1,0 +1,84 @@
+{{- if .Values.dataSources.refreshCronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-data-refresh
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "data-refresh") | nindent 4 }}
+  {{- with (include "starcitizen-api.commonAnnotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.dataSources.refreshCronJob.schedule | quote }}
+  suspend: {{ .Values.dataSources.refreshCronJob.suspend }}
+  concurrencyPolicy: {{ .Values.dataSources.refreshCronJob.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.dataSources.refreshCronJob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.dataSources.refreshCronJob.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "data-refresh") | nindent 12 }}
+        spec:
+          restartPolicy: {{ .Values.dataSources.refreshCronJob.restartPolicy }}
+          serviceAccountName: {{ include "starcitizen-api.serviceAccountName" . }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          initContainers:
+            - name: refresh-submodules
+              image: "{{ .Values.dataSources.init.image.repository }}:{{ .Values.dataSources.init.image.tag }}"
+              imagePullPolicy: {{ .Values.dataSources.init.image.pullPolicy }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  mkdir -p /storage/app/api
+                  cd /storage/app/api
+                  {{- range .Values.dataSources.repositories }}
+                  if [ -d "{{ .name }}/.git" ]; then
+                    echo ">> updating {{ .name }}"
+                    git -C "{{ .name }}" fetch --depth=1 origin {{ if .branch }}{{ .branch | quote }}{{ else }}HEAD{{ end }}
+                    git -C "{{ .name }}" reset --hard FETCH_HEAD
+                  else
+                    echo ">> cloning {{ .name }}"
+                    rm -rf "{{ .name }}"
+                    git clone --depth=1 {{ if .branch }}--branch {{ .branch | quote }} {{ end }}{{ .url | quote }} "{{ .name }}"
+                  fi
+                  {{- end }}
+              volumeMounts:
+                - name: storage
+                  mountPath: /storage
+          containers:
+            - name: game-sync
+              image: {{ include "starcitizen-api.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              {{- with .Values.api.securityContext }}
+              securityContext:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              command:
+                {{- toYaml .Values.dataSources.refreshCronJob.command | nindent 16 }}
+              env:
+                - name: CONTAINER_ROLE
+                  value: app
+                {{- include "starcitizen-api.secretEnv" . | nindent 16 }}
+              envFrom:
+                {{- include "starcitizen-api.envFrom" . | nindent 16 }}
+              {{- with .Values.dataSources.refreshCronJob.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                {{- include "starcitizen-api.volumeMounts" . | nindent 16 }}
+          volumes:
+            {{- include "starcitizen-api.volumes" . | nindent 12 }}
+{{- end }}
