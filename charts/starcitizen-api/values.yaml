@@ -539,7 +539,7 @@ rustApi:
     # -- Rust API container image repository
     repository: cfi2017/starcitizen-rust-api
     # -- Rust API container image tag
-    tag: "latest"
+    tag: "develop"
     # -- Image digest (overrides tag when set)
     digest: ""
     # -- Image pull policy
