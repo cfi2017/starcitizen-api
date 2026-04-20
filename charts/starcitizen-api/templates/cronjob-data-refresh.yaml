@@ -66,7 +66,13 @@ spec:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
               command:
-                {{- toYaml .Values.dataSources.refreshCronJob.command | nindent 16 }}
+                - php
+                - artisan
+                - game:sync
+                {{- if .Values.gameVersion }}
+                - "--game-version={{ .Values.gameVersion }}"
+                {{- end }}
+                - --no-interaction
               env:
                 - name: CONTAINER_ROLE
                   value: app

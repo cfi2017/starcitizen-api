@@ -1,0 +1,123 @@
+{{- if .Values.rustApi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-rust-api
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "rust-api") | nindent 4 }}
+  {{- with (include "starcitizen-api.commonAnnotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.rustApi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "starcitizen-api.componentSelectorLabels" (dict "context" . "component" "rust-api") | nindent 6 }}
+  {{- with .Values.rustApi.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "rust-api") | nindent 8 }}
+        {{- with .Values.rustApi.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.rustApi.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "starcitizen-api.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rustApi.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: init-data
+          image: "{{ .Values.dataSources.init.image.repository }}:{{ .Values.dataSources.init.image.tag }}"
+          imagePullPolicy: {{ .Values.dataSources.init.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              cd /data
+              {{- range .Values.dataSources.repositories }}
+              if [ ! -d "{{ .name }}/.git" ]; then
+                echo ">> cloning {{ .name }}"
+                rm -rf "{{ .name }}"
+                git clone --depth=1 {{ if .branch }}--branch {{ .branch | quote }} {{ end }}{{ .url | quote }} "{{ .name }}"
+              else
+                echo ">> {{ .name }} already present, skipping"
+              fi
+              {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: rust-api
+          image: {{ include "starcitizen-api.rustApiImage" . }}
+          imagePullPolicy: {{ .Values.rustApi.image.pullPolicy }}
+          {{- with .Values.rustApi.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: DATA_DIR
+              value: /data
+            - name: BIND_ADDR
+              value: "0.0.0.0:8080"
+            - name: RUST_LOG
+              value: {{ .Values.rustApi.logLevel | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- with .Values.rustApi.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.rustApi.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.rustApi.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.rustApi.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: data
+          {{- if .Values.rustApi.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.rustApi.persistence.existingClaim | default (printf "%s-rust-data" (include "starcitizen-api.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.rustApi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rustApi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rustApi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,21 @@
+{{- if and .Values.rustApi.enabled .Values.rustApi.persistence.enabled (not .Values.rustApi.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-rust-data
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "rust-api") | nindent 4 }}
+  {{- with (include "starcitizen-api.commonAnnotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.rustApi.persistence.accessMode }}
+  {{- with .Values.rustApi.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.rustApi.persistence.size }}
+{{- end }}

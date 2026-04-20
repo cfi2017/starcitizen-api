@@ -36,6 +36,13 @@ serviceAccount:
   # -- Automatically mount service account token
   automount: false
 
+# -- Star Citizen game version code matching the scunpacked-data checkout
+# (e.g. "4.0.2"). When set, the install job will create this version as the
+# default and run `game:sync` to import items, vehicles and starmap data.
+# The data-refresh CronJob will also pass this version to `game:sync`.
+# Leave empty to skip automatic game data import (manual setup required).
+gameVersion: ""
+
 # =============================================================================
 # Application configuration
 # =============================================================================
@@ -310,8 +317,6 @@ dataSources:
     concurrencyPolicy: Forbid
     # -- Restart policy for the pod
     restartPolicy: OnFailure
-    # -- Artisan command run after the git pull completes
-    command: ["php", "artisan", "game:sync"]
     resources: {}
 
 # =============================================================================
@@ -516,6 +521,116 @@ queueExpensive:
   sleep: 3
   timeout: 600
   memoryLimit: 1024
+
+# =============================================================================
+# Rust API (stateless, in-memory game data service)
+# =============================================================================
+# Optional read-only Rust backend that loads all scunpacked game data into
+# memory and serves it via HTTP. When enabled it runs alongside (or instead
+# of) the Laravel API. The git data repos are cached in a dedicated PVC.
+# =============================================================================
+rustApi:
+  # -- Enable the Rust API deployment
+  enabled: true
+
+  image:
+    # -- Rust API container image registry
+    registry: ghcr.io
+    # -- Rust API container image repository
+    repository: cfi2017/starcitizen-rust-api
+    # -- Rust API container image tag
+    tag: "latest"
+    # -- Image digest (overrides tag when set)
+    digest: ""
+    # -- Image pull policy
+    pullPolicy: Always
+
+  # -- Number of replicas
+  replicaCount: 2
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod labels
+  podLabels: {}
+  # -- Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+  # -- Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+  # -- Log level (RUST_LOG format)
+  logLevel: "starcitizen_api=info,tower_http=info"
+  # -- Resource requests and limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  # -- Pod affinity rules
+  affinity: {}
+  # -- Node selector
+  nodeSelector: {}
+  # -- Pod tolerations
+  tolerations: []
+  # -- Update strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /up
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /up
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # -- Startup probe (data loading can take a while)
+  startupProbe:
+    httpGet:
+      path: /up
+      port: http
+    failureThreshold: 30
+    periodSeconds: 10
+
+  service:
+    # -- Service type
+    type: ClusterIP
+    # -- Service port
+    port: 80
+    # -- Service annotations
+    annotations: {}
+
+  # Persistent volume for cached git data repos
+  persistence:
+    # -- Cache data repos in a PVC (recommended to avoid re-cloning on restart)
+    enabled: true
+    # -- Storage class (empty = cluster default)
+    storageClass: ""
+    # -- Access mode
+    accessMode: ReadWriteOnce
+    # -- Volume size (raw scunpacked-data is ~3 GB)
+    size: 10Gi
+    # -- Use an existing PVC
+    existingClaim: ""
 
 # =============================================================================
 # Gateway API (HTTPRoute)

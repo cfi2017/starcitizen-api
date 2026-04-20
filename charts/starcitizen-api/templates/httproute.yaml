@@ -1,6 +1,9 @@
 {{- if .Values.gatewayApi.enabled }}
 {{- $fullName := include "starcitizen-api.fullname" . -}}
-{{- $svcPort := .Values.api.service.port -}}
+{{- $phpSvcName := $fullName -}}
+{{- $phpSvcPort := .Values.api.service.port -}}
+{{- $rustSvcName := printf "%s-rust-api" $fullName -}}
+{{- $rustSvcPort := .Values.rustApi.service.port -}}
 apiVersion: {{ .Values.gatewayApi.apiVersion }}
 kind: HTTPRoute
 metadata:
@@ -52,8 +55,8 @@ spec:
       backendRefs:
         {{- if .backendRefs }}
         {{- range .backendRefs }}
-        - name: {{ .name | default $fullName }}
-          port: {{ .port | default $svcPort }}
+        - name: {{ .name | default $phpSvcName }}
+          port: {{ .port | default $phpSvcPort }}
           {{- with .weight }}
           weight: {{ . }}
           {{- end }}
@@ -68,17 +71,127 @@ spec:
           {{- end }}
         {{- end }}
         {{- else }}
-        - name: {{ $fullName }}
-          port: {{ $svcPort }}
+        - name: {{ $phpSvcName }}
+          port: {{ $phpSvcPort }}
         {{- end }}
     {{- end }}
+    {{- else if .Values.rustApi.enabled }}
+    {{/* When Rust API is enabled, route game-data API paths to it and
+         everything else (frontend + DB-backed API endpoints) to PHP. */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/items
+        - path:
+            type: PathPrefix
+            value: /api/weapons
+        - path:
+            type: PathPrefix
+            value: /api/weapon-attachments
+        - path:
+            type: PathPrefix
+            value: /api/clothes
+        - path:
+            type: PathPrefix
+            value: /api/armor
+        - path:
+            type: PathPrefix
+            value: /api/food
+        - path:
+            type: PathPrefix
+            value: /api/vehicle-weapons
+        - path:
+            type: PathPrefix
+            value: /api/vehicle-items
+        - path:
+            type: PathPrefix
+            value: /api/vehicles
+        - path:
+            type: PathPrefix
+            value: /api/ground-vehicles
+        - path:
+            type: PathPrefix
+            value: /api/gravlev-vehicles
+        - path:
+            type: PathPrefix
+            value: /api/blueprints
+        - path:
+            type: PathPrefix
+            value: /api/manufacturers
+        - path:
+            type: PathPrefix
+            value: /api/resource-types
+        - path:
+            type: PathPrefix
+            value: /api/locations
+      backendRefs:
+        - name: {{ $rustSvcName }}
+          port: {{ $rustSvcPort }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v3/items
+        - path:
+            type: PathPrefix
+            value: /api/v3/weapons
+        - path:
+            type: PathPrefix
+            value: /api/v3/weapon-attachments
+        - path:
+            type: PathPrefix
+            value: /api/v3/clothes
+        - path:
+            type: PathPrefix
+            value: /api/v3/armor
+        - path:
+            type: PathPrefix
+            value: /api/v3/food
+        - path:
+            type: PathPrefix
+            value: /api/v3/vehicle-weapons
+        - path:
+            type: PathPrefix
+            value: /api/v3/vehicle-items
+        - path:
+            type: PathPrefix
+            value: /api/v3/vehicles
+        - path:
+            type: PathPrefix
+            value: /api/v3/ground-vehicles
+        - path:
+            type: PathPrefix
+            value: /api/v3/gravlev-vehicles
+        - path:
+            type: PathPrefix
+            value: /api/v3/blueprints
+        - path:
+            type: PathPrefix
+            value: /api/v3/manufacturers
+        - path:
+            type: PathPrefix
+            value: /api/v3/resource-types
+        - path:
+            type: PathPrefix
+            value: /api/v3/locations
+      backendRefs:
+        - name: {{ $rustSvcName }}
+          port: {{ $rustSvcPort }}
+    {{/* Catch-all: frontend pages + DB-backed API (comm-links, galactapedia,
+         stats, starsystems, celestial-objects, shipmatrix, game-versions) */}}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $phpSvcName }}
+          port: {{ $phpSvcPort }}
     {{- else }}
     - matches:
         - path:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: {{ $fullName }}
-          port: {{ $svcPort }}
+        - name: {{ $phpSvcName }}
+          port: {{ $phpSvcPort }}
     {{- end }}
 {{- end }}

@@ -1,0 +1,21 @@
+{{- if .Values.rustApi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "starcitizen-api.fullname" . }}-rust-api
+  labels:
+    {{- include "starcitizen-api.componentLabels" (dict "context" . "component" "rust-api") | nindent 4 }}
+  {{- with .Values.rustApi.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.rustApi.service.type }}
+  ports:
+    - port: {{ .Values.rustApi.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "starcitizen-api.componentSelectorLabels" (dict "context" . "component" "rust-api") | nindent 4 }}
+{{- end }}

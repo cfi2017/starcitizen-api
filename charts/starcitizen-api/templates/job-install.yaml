@@ -47,6 +47,12 @@ spec:
               set -e
               echo ">> Running Laravel migrations"
               php artisan migrate --force --no-interaction
+              {{- if .Values.gameVersion }}
+              echo ">> Ensuring game version {{ .Values.gameVersion }}"
+              php artisan game:add-version --default {{ .Values.gameVersion | quote }} --no-interaction || true
+              echo ">> Running game:sync for {{ .Values.gameVersion }}"
+              php artisan game:sync --game-version={{ .Values.gameVersion | quote }} --no-interaction
+              {{- end }}
               {{- range .Values.installJob.extraCommands }}
               echo ">> {{ . | join " " }}"
               {{ . | join " " }}

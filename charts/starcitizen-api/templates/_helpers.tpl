@@ -103,6 +103,20 @@ Image reference. Honours image.digest when set.
 {{- end }}
 
 {{/*
+Rust API image reference.
+*/}}
+{{- define "starcitizen-api.rustApiImage" -}}
+{{- $registry := .Values.rustApi.image.registry -}}
+{{- $repo := .Values.rustApi.image.repository -}}
+{{- $tag := default .Chart.AppVersion .Values.rustApi.image.tag -}}
+{{- if .Values.rustApi.image.digest -}}
+{{- printf "%s/%s@%s" $registry $repo .Values.rustApi.image.digest -}}
+{{- else -}}
+{{- printf "%s/%s:%s" $registry $repo $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Name of the ConfigMap that carries the non-sensitive env vars.
 */}}
 {{- define "starcitizen-api.configMapName" -}}

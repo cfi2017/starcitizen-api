@@ -21,6 +21,7 @@
 /storage/app/api/scunpacked-data/labels.json
 /storage/app/api/ScToolBoxLocales/chinese_(simplified)/global.ini
 /vendor
+/rust-api/target
 Homestead.json
 Homestead.yaml
 Thumbs.db

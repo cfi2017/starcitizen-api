@@ -78,6 +78,17 @@ jobs:
             --set ingress.className=nginx \
             > /tmp/rendered-ingress.yaml
 
+      - name: Template (Rust API + Gateway API routing)
+        working-directory: charts/starcitizen-api
+        run: |
+          helm template ci . --namespace ci \
+            --set rustApi.enabled=true \
+            --set gatewayApi.enabled=true \
+            --set 'gatewayApi.parentRefs[0].name=external' \
+            --set 'gatewayApi.parentRefs[0].namespace=gateway-system' \
+            --set 'gatewayApi.hostnames[0]=api.example.com' \
+            > /tmp/rendered-rust-api.yaml
+
       # Validate rendered manifests against upstream Kubernetes schemas and
       # Gateway API CRDs. Uses kubeconform because it understands CRDs via
       # the --schema-location option.
