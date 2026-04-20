@@ -11,7 +11,7 @@ use crate::models::{
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// All game data loaded into memory.
 pub struct GameData {
@@ -42,7 +42,28 @@ impl GameData {
         let german_ini = data_dir.join("StarCitizenDeutsch/live/global.ini");
         let chinese_ini = data_dir.join("ScToolBoxLocales/chinese_(simplified)/global.ini");
 
-        info!("Loading game data from {}", scunpacked.display());
+        info!(
+            path = %scunpacked.display(),
+            exists = scunpacked.exists(),
+            "Loading game data"
+        );
+
+        if scunpacked.is_dir() {
+            match std::fs::read_dir(&scunpacked) {
+                Ok(entries) => {
+                    let names: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_string_lossy().to_string())
+                        .collect();
+                    info!(contents = ?names, "scunpacked-data contents");
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to list scunpacked-data directory");
+                }
+            }
+        } else {
+            warn!("scunpacked-data directory does not exist, loading with empty data");
+        }
 
         // Load labels first (needed for translations)
         let labels = load_labels(&scunpacked, &german_ini, &chinese_ini);

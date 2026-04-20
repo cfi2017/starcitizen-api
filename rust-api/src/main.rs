@@ -14,16 +14,45 @@ use tower_http::{
     cors::CorsLayer,
     trace::TraceLayer,
 };
-use tracing::info;
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() {
+    // Initialize tracing FIRST so panics during loading are visible.
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "starcitizen_api=info,tower_http=info".into()),
         )
+        // Use JSON format in production for structured logging
+        .json()
+        .flatten_event(true)
+        .with_current_span(false)
         .init();
+
+    // Install a panic hook that logs via tracing before aborting.
+    std::panic::set_hook(Box::new(|info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "unknown panic".to_string()
+        };
+
+        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
+
+        eprintln!("PANIC: {payload} at {}", location.as_deref().unwrap_or("unknown"));
+        // Also emit via tracing in case stderr is swallowed
+        tracing::error!(
+            panic = true,
+            message = %payload,
+            location = location.as_deref().unwrap_or("unknown"),
+            "Application panicked"
+        );
+    }));
+
+    info!(version = env!("CARGO_PKG_VERSION"), "starcitizen-rust-api starting");
 
     let data_dir = env::var("DATA_DIR")
         .map(PathBuf::from)
@@ -31,18 +60,92 @@ async fn main() {
 
     let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
 
-    info!("Loading game data from {}", data_dir.display());
+    info!(data_dir = %data_dir.display(), "Resolved data directory");
+
+    // Check data directory exists
+    if !data_dir.exists() {
+        error!(path = %data_dir.display(), "DATA_DIR does not exist");
+        std::process::exit(1);
+    }
+
+    if !data_dir.is_dir() {
+        error!(path = %data_dir.display(), "DATA_DIR is not a directory");
+        std::process::exit(1);
+    }
+
+    // List contents for debugging
+    match std::fs::read_dir(&data_dir) {
+        Ok(entries) => {
+            let names: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .collect();
+            info!(contents = ?names, "DATA_DIR contents");
+        }
+        Err(e) => {
+            error!(error = %e, path = %data_dir.display(), "Failed to read DATA_DIR");
+            std::process::exit(1);
+        }
+    }
+
+    // Check scunpacked-data subdirectory
+    let scunpacked = data_dir.join("scunpacked-data");
+    if !scunpacked.is_dir() {
+        warn!(path = %scunpacked.display(), "scunpacked-data directory not found - service will start with empty data");
+    }
+
+    info!("Loading game data...");
     let data = Arc::new(loader::GameData::load(&data_dir));
-    info!("Data loaded: {}", data.memory_report());
+    info!(
+        items = data.items.len(),
+        vehicles = data.vehicles.len(),
+        blueprints = data.blueprints.len(),
+        manufacturers = data.manufacturers.len(),
+        resource_types = data.resource_types.len(),
+        starmap_locations = data.starmap_locations.len(),
+        entity_tags = data.entity_tags.len(),
+        labels = data.labels.len(),
+        "Data loading complete"
+    );
 
     let app = build_router(data);
 
-    let listener = tokio::net::TcpListener::bind(&bind_addr)
-        .await
-        .expect("Failed to bind");
+    info!(addr = %bind_addr, "Binding listener");
+    let listener = match tokio::net::TcpListener::bind(&bind_addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            error!(error = %e, addr = %bind_addr, "Failed to bind listener");
+            std::process::exit(1);
+        }
+    };
 
-    info!("Listening on {bind_addr}");
-    axum::serve(listener, app).await.expect("Server error");
+    info!(addr = %bind_addr, "Server ready, accepting connections");
+
+    let shutdown = async {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received SIGINT, shutting down gracefully");
+            }
+            _ = sigterm.recv() => {
+                info!("Received SIGTERM, shutting down gracefully");
+            }
+        }
+    };
+
+    match axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await
+    {
+        Ok(()) => {
+            info!("Server shut down gracefully");
+        }
+        Err(e) => {
+            error!(error = %e, "Server error");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn build_router(data: Arc<loader::GameData>) -> Router {
